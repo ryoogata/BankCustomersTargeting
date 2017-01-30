@@ -14,10 +14,15 @@ source("./Data-pre-processing.R")
 
 my_preProcess <- c("center", "scale")
 
-# train.dummy <- train.dummy.nzv.highlyCorDescr
-# train.dummy.train <- train.dummy.nzv.highlyCorDescr.train
-# train.dummy.test <- train.dummy.nzv.highlyCorDescr.test
-# test.dummy <- test.dummy.nzv.highlyCorDescr
+TRAIN <- train.dummy.nzv.highlyCorDescr
+TRAIN.TRAIN <- train.dummy.nzv.highlyCorDescr.train
+TRAIN.TEST <- train.dummy.nzv.highlyCorDescr.test
+TEST <- test.dummy.nzv.highlyCorDescr
+
+TRAIN <- train.dummy
+TRAIN.TRAIN <- train.dummy.train
+TRAIN.TEST <- train.dummy.test
+TEST <- test.dummy
 
 #
 # glm
@@ -36,7 +41,7 @@ my_control <- trainControl(
   ,classProbs = TRUE
   ,verbose = TRUE
   ,savePredictions = "final"
-  ,index = createResample(train.dummy.train$response, 10)
+  ,index = createResample(TRAIN.TRAIN$response, 10)
   ,seeds = seeds
 )
 
@@ -48,12 +53,12 @@ doParallel <- trainControl(
   ,allowParallel=TRUE
   ,verboseIter=TRUE
   ,savePredictions = "final"
-  ,index = createResample(train.dummy.train$response, 10)
+  ,index = createResample(TRAIN.TRAIN$response, 10)
   ,seeds = seeds
 )
 
 # 説明変数一覧の作成
-explanation_variable.glm.dummy <- names(subset(train.dummy, select = -c(response)))
+explanation_variable.glm.dummy <- names(subset(TRAIN, select = -c(response)))
 
 # fit.glm.dummy <-
 #   train(
@@ -68,8 +73,8 @@ explanation_variable.glm.dummy <- names(subset(train.dummy, select = -c(response
 # registerDoParallel(cl)
 
 model_list_glm.dummy <- caretList(
-  x = train.dummy.train[,explanation_variable.glm.dummy]
-  ,y = train.dummy.train$response
+  x = TRAIN.TRAIN[,explanation_variable.glm.dummy]
+  ,y = TRAIN.TRAIN$response
   ,trControl = my_control
   #,trControl = doParallel
   #,preProcess = my_preProcess
@@ -104,8 +109,8 @@ varImp(fit.glm.dummy, scale = FALSE)
 #
 allProb.glm.dummy <- caret::extractProb(
                                         list(fit.glm.dummy)
-                                        ,testX = subset(train.dummy.test, select = -c(response))
-                                        ,testY = unlist(subset(train.dummy.test, select = c(response)))
+                                        ,testX = subset(TRAIN.TEST, select = -c(response))
+                                        ,testY = unlist(subset(TRAIN.TEST, select = c(response)))
                                        )
 
 # dataType 列に Test と入っているもののみを抜き出す
@@ -123,21 +128,21 @@ if (is.null(fit.glm.dummy$preProcess)){
   # preProcess を指定していない場合
   pred_test.verification <- predict(
                                     fit.glm.dummy$finalModel
-                                    ,subset(train.dummy.test, select = -c(response))
+                                    ,subset(TRAIN.TEST, select = -c(response))
                                     ,type = "response"
                                    )
 } else {
   # preProcess を指定している場合
   pred_test.verification <- preProcess(
-                                        subset(train.dummy.test ,select = -c(response))
+                                        subset(TRAIN.TEST ,select = -c(response))
                                         ,method = my_preProcess
                                       ) %>%
-    predict(., subset(train.dummy.test, select = -c(response))) %>%
+    predict(., subset(TRAIN.TEST, select = -c(response))) %>%
     predict(fit.glm.dummy$finalModel, ., type="response")
 }
 
 # ROC
-pROC::roc(train.dummy.test[,"response"], pred_test.verification)
+pROC::roc(TRAIN.TEST[,"response"], pred_test.verification)
 
 
 #
@@ -145,13 +150,13 @@ pROC::roc(train.dummy.test[,"response"], pred_test.verification)
 #
 if (is.null(fit.glm.dummy$preProcess)){
   # preProcess を指定していない場合
-  pred_test <- predict(fit.glm.dummy$finalModel, test.dummy, type="response")
+  pred_test <- predict(fit.glm.dummy$finalModel, TEST, type="response")
   
   PREPROCESS <- "no_preProcess"
 } else {
   # preProcess を指定している場合
-  pred_test <- preProcess(test.dummy, method = my_preProcess) %>%
-    predict(., test.dummy) %>%
+  pred_test <- preProcess(TEST, method = my_preProcess) %>%
+    predict(., TEST) %>%
     predict(fit.glm.dummy$finalModel, ., type="response")
   
   PREPROCESS <- paste(my_preProcess, collapse = "_")
