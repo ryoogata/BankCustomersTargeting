@@ -1,7 +1,9 @@
+require(caret)
+require(caretEnsemble)
+require(doParallel)
+
 require(xgboost)
 require(Matrix)
-require(doParallel)
-require(caretEnsemble)
 
 #
 # 前処理
@@ -10,12 +12,22 @@ source("./Data-pre-processing.R")
 
 my_preProcess <- c("center", "scale")
 
+TRAIN <- train.dummy
+TRAIN.TRAIN <- train.dummy.train
+TRAIN.TEST <- train.dummy.test
+TEST <- test.dummy
+
+TRAIN <- train.dummy.nzv.highlyCorDescr
+TRAIN.TRAIN <- train.dummy.nzv.highlyCorDescr.train
+TRAIN.TEST <- train.dummy.nzv.highlyCorDescr.test
+TEST <- test.dummy.nzv.highlyCorDescr
+
 #
 # xgbLinear
 #
 
 # 説明変数一覧の作成
-explanation_variable.xgbLinear.dummy <- names(subset(train.dummy, select = -c(response)))
+explanation_variable.xgbLinear <- names(subset(TRAIN, select = -c(response)))
 
 # seeds の決定
 set.seed(123)
@@ -31,18 +43,18 @@ doParallel <- trainControl(
   ,allowParallel=TRUE
   ,verboseIter=TRUE
   ,savePredictions = "final"
-  ,index = createResample(train.dummy.train$response, 10)
+  ,index = createResample(TRAIN.TRAIN$response, 10)
   ,seeds = seeds
 )
 
 # fit.xgbLinear <-
 #   train(
-#         x = train.dummy.train[,explanation_variable.xgbLinear]
-#         ,y = train.dummy.train$response
+#         x = TRAIN.TRAIN[,explanation_variable.xgbLinear]
+#         ,y = TRAIN.TRAIN$response
 #         ,trControl = doParallel
 #         ,method = "xgbLinear"
 #         ,metric = "ROC" 
-#         ,label = train.dummy.train$response
+#         ,label = TRAIN.TRAIN$response
 #         #,objective = "binary:logistic"
 #         #,eval_metric = "auc"
 #         ,tuneGrid = expand.grid(
@@ -56,16 +68,16 @@ doParallel <- trainControl(
 cl <- makeCluster(detectCores(), type = 'PSOCK', outfile = " ")
 registerDoParallel(cl)
 
-model_list_xgbLinear.dummy <- caretList(
-  x = train.dummy.train[,explanation_variable.xgbLinear.dummy]
-  ,y = train.dummy.train$response
+model_list_xgbLinear <- caretList(
+  x = TRAIN.TRAIN[,explanation_variable.xgbLinear]
+  ,y = TRAIN.TRAIN$response
   ,trControl = doParallel
   #,preProcess = my_preProcess
   ,tuneList = list(
     xgboost = caretModelSpec(
         method = "xgbLinear"
         ,metric = "ROC" 
-        ,label = train.dummy.train$response
+        ,label = TRAIN.TRAIN$response
         ,tuneGrid = expand.grid(
                                 nrounds = c(50)
                                 ,lambda = c(.3)
@@ -79,7 +91,7 @@ model_list_xgbLinear.dummy <- caretList(
 stopCluster(cl)
 registerDoSEQ()
 
-fit.xgbLinear.dummy <- model_list_xgbLinear.dummy[[1]]
+fit.xgbLinear <- model_list_xgbLinear[[1]]
 
 # 2017/01/15
 # Fitting nrounds = 50, lambda = 0.1, alpha = 0.4, eta = 0.1 on full training set
@@ -109,21 +121,21 @@ fit.xgbLinear.dummy <- model_list_xgbLinear.dummy[[1]]
 # 5.532   0.292 456.456 ( 8 minute )
 
 
-fit.xgbLinear.dummy$times
+fit.xgbLinear$times
 # $everything
 # ユーザ   システム       経過  
 # 12.079      0.517     12.710 
 
-fit.xgbLinear.dummy$finalModel
-ggplot(fit.xgbLinear.dummy) 
-fit.xgbLinear.dummy$preProcess
+fit.xgbLinear$finalModel
+ggplot(fit.xgbLinear) 
+fit.xgbLinear$preProcess
 
 #
 # テストデータにモデルを当てはめる ( Prob )
 #
-allProb.xgbLinear <- caret::extractProb(list(fit.xgbLinear.dummy),
-                                    testX = subset(train.dummy.test, select = -c(response)),
-                                    testY = unlist(subset(train.dummy.test, select = c(response))))
+allProb.xgbLinear <- caret::extractProb(list(fit.xgbLinear),
+                                    testX = subset(TRAIN.TEST, select = -c(response)),
+                                    testY = unlist(subset(TRAIN.TEST, select = c(response))))
 
 # dataType 列に Test と入っているもののみを抜き出す
 testProb.xgbLinear <- subset(allProb.xgbLinear, dataType == "Test")
@@ -135,51 +147,51 @@ confusionMatrix(tp_xgbLinear$pred, tp_xgbLinear$obs)$overall[1]
 pROC::roc(tp_xgbLinear$obs, tp_xgbLinear$yes)
 
 # predict() を利用した検算 
-if (is.null(fit.xgbLinear.dummy$preProcess)){
+if (is.null(fit.xgbLinear$preProcess)){
   # preProcess を指定していない場合
   pred_test.verification <- predict(
-    fit.xgbLinear.dummy$finalModel
-    ,as.matrix(subset(train.dummy.test, select = -c(response)))
+    fit.xgbLinear$finalModel
+    ,as.matrix(subset(TRAIN.TEST, select = -c(response)))
   )
 } else {
   # preProcess を指定している場合
   pred_test.verification <- preProcess(
-    subset(train.dummy.test ,select = -c(response))
+    subset(TRAIN.TEST ,select = -c(response))
     ,method = my_preProcess
   ) %>%
-    predict(., subset(train.dummy.test, select = -c(response))) %>%
+    predict(., subset(TRAIN.TEST, select = -c(response))) %>%
     as.matrix(.) %>%
-    predict(fit.xgbLinear.dummy$finalModel, .)
+    predict(fit.xgbLinear$finalModel, .)
 }
 
 # ROC
-pROC::roc(train.dummy.test[,"response"], pred_test.verification)
+pROC::roc(TRAIN.TEST[,"response"], pred_test.verification)
 
 
 #
 # 予測データにモデルの当てはめ
 #
-#pred_test.xgbLinear <- predict(fit.xgbLinear.dummy$finalModel, Matrix::Matrix(as.matrix(test.dummy), sparse=T))
-#pred_test.xgbLinear <- predict(fit.xgbLinear.dummy$finalModel, as.matrix(test.dummy))
+#pred_test.xgbLinear <- predict(fit.xgbLinear$finalModel, Matrix::Matrix(as.matrix(TEST), sparse=T))
+#pred_test.xgbLinear <- predict(fit.xgbLinear$finalModel, as.matrix(TEST))
 #pred_test.xgbLinear <- 1 - pred_test.xgbLinear
 
-if (is.null(fit.xgbLinear.dummy$preProcess)){
+if (is.null(fit.xgbLinear$preProcess)){
   # preProcess を指定していない場合
   pred_test.xgbLinear  <- predict(
-    fit.xgbLinear.dummy$finalModel
-    ,as.matrix(test.dummy)
+    fit.xgbLinear$finalModel
+    ,as.matrix(TEST)
   )
   pred_test.xgbLinear <- 1 - pred_test.xgbLinear
   PREPROCESS <- "no_preProcess"
 } else {
   # preProcess を指定している場合
   pred_test.xgbLinear  <- preProcess(
-    test.dummy
+    TEST
     ,method = my_preProcess
   ) %>%
-    predict(., test.dummy) %>%
+    predict(., TEST) %>%
     as.matrix(.) %>%
-    predict(fit.xgbLinear.dummy$finalModel, .)
+    predict(fit.xgbLinear$finalModel, .)
   pred_test.xgbLinear <- 1 - pred_test.xgbLinear
   PREPROCESS <- paste(my_preProcess, collapse = "_")
 }
@@ -187,12 +199,12 @@ if (is.null(fit.xgbLinear.dummy$preProcess)){
 
 #submitの形式で出力(CSV)
 #データ加工
-out.xgbLinear <- data.frame(test.dummy$id, pred_test.xgbLinear)
+out.xgbLinear <- data.frame(TEST$id, pred_test.xgbLinear)
 
 # 予測データを保存
 for(NUM in 1:10){
   DATE <- format(jrvFinance::edate(from = Sys.Date(), 0), "%Y%m%d")
-  SUBMIT_FILENAME <- paste("./submit/submit_", DATE, "_", NUM, "_", PREPROCESS, "_xgbLinear.dummy.csv", sep = "")
+  SUBMIT_FILENAME <- paste("./submit/submit_", DATE, "_", NUM, "_", PREPROCESS, "_xgbLinear.csv", sep = "")
   
   if ( !file.exists(SUBMIT_FILENAME) ) {
     write.table(out.xgbLinear, #出力データ
