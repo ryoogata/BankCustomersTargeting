@@ -88,10 +88,44 @@ model_list_xgbLinear <- caretList(
     )
 )
 
+# model_list_xgbLinear <- caretList(
+#   trControl = doParallel
+#   #,preProcess = my_preProcess
+#   ,tuneList = list(
+#     xgboost = caretModelSpec(
+#         method = "xgbLinear"
+#         ,x = train.dummy.train[,explanation_variable.xgbLinear]
+#         ,y = train.dummy.train$response
+#         ,metric = "ROC" 
+#         ,label = train.dummy.train$response
+#         ,tuneGrid = expand.grid(
+#                                 nrounds = c(50)
+#                                 ,lambda = c(.3)
+#                                 ,alpha =  c(1)
+#                                 ,eta = c(.1)
+#                                )
+#     )
+#     ,xgboost2 = caretModelSpec(
+#         method = "xgbLinear"
+#         ,x = train.dummy.nzv.highlyCorDescr.train[,explanation_variable.xgbLinear]
+#         ,y = train.dummy.nzv.highlyCorDescr.train$response
+#         ,metric = "ROC" 
+#         ,label = train.dummy.nzv.highlyCorDescr.train$response
+#         ,tuneGrid = expand.grid(
+#                                 nrounds = c(50)
+#                                 ,lambda = c(.3)
+#                                 ,alpha =  c(1)
+#                                 ,eta = c(.1)
+#                                )
+#     )
+#   )
+# )
+
 stopCluster(cl)
 registerDoSEQ()
 
 fit.xgbLinear <- model_list_xgbLinear[[1]]
+# fit.xgbLinear <- model_list_xgbLinear[[2]]
 
 # 2017/01/15
 # Fitting nrounds = 50, lambda = 0.1, alpha = 0.4, eta = 0.1 on full training set
