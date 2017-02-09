@@ -5,7 +5,7 @@ require(doParallel)
 
 require(kknn)
 
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.kknn.df <- readRDS("result/result.kknn.df.data")
 
 #

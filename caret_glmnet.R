@@ -5,7 +5,7 @@ require(doParallel)
 
 require(glmnet)
 
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.glmnet.df <- readRDS("result/result.glmnet.df.data")
 
 #

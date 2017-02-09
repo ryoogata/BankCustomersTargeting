@@ -2,7 +2,7 @@ require(caret)
 require(mxnet)
 require(dplyr)
 
-source("./mxnetResult.R")
+source("script/R/fun/mxnetResult.R")
 result.mxnet.df <- readRDS("result/result.mxnet.df.data")
 
 #

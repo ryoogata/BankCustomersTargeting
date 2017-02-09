@@ -5,8 +5,7 @@ require(doParallel)
 
 require(kernlab)
 
-
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.svmRadial.df <- readRDS("result/result.svmRadial.df.data")
 
 #

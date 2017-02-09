@@ -6,7 +6,7 @@ require(doParallel)
 require(nnet)
 require(doParallel)
 
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.nnet.df <- readRDS("result/result.nnet.df.data")
 
 #

@@ -7,7 +7,7 @@ require(partykit)
 #require(rattle)
 require(mlbench)
 
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.glm.df <- readRDS("result/result.glm.df.data")
 
 #

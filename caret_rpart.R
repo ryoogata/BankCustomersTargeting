@@ -7,7 +7,7 @@ require(rpart)
 require(partykit)
 #require(rattle)
 
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.rpart.df <- readRDS("result/result.rpart.df.data")
 
 #

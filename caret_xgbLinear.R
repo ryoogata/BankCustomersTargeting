@@ -5,7 +5,7 @@ require(doParallel)
 require(xgboost)
 require(Matrix)
 
-source("./summaryResult.R")
+source("script/R/fun/summaryResult.R")
 result.xgbLinear.df <- readRDS("result/result.xgbLinear.df.data")
 
 #
