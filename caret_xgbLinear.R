@@ -5,6 +5,9 @@ require(doParallel)
 require(xgboost)
 require(Matrix)
 
+source("./summaryResult.R")
+result.xgbLinear.df <- readRDS("result/result.xgbLinear.df.data")
+
 #
 # 前処理
 #
@@ -12,22 +15,39 @@ source("./Data-pre-processing.R")
 
 my_preProcess <- c("center", "scale")
 
-TRAIN <- train.dummy
-TRAIN.TRAIN <- train.dummy.train
-TRAIN.TEST <- train.dummy.test
-TEST <- test.dummy
+data_preProcess <- "none"
+data_preProcess <- "nzv"
+data_preProcess <- "dummy"
+data_preProcess <- "dummy.nzv.highlyCorDescr"
 
-TRAIN <- train.dummy.nzv.highlyCorDescr
-TRAIN.TRAIN <- train.dummy.nzv.highlyCorDescr.train
-TRAIN.TEST <- train.dummy.nzv.highlyCorDescr.test
-TEST <- test.dummy.nzv.highlyCorDescr
+if ( data_preProcess == "none") {
+  TRAIN <- all.train
+  TRAIN.TRAIN <- train.train
+  TRAIN.TEST <- train.test
+  TEST <- test
+} else if ( data_preProcess == "nzv") {
+  TRAIN <- all.nzv.train
+  TRAIN.TRAIN <- train.nzv.train
+  TRAIN.TEST <- train.nzv.test
+  TEST <- test
+} else if ( data_preProcess == "dummy") {
+  TRAIN <- train.dummy
+  TRAIN.TRAIN <- train.dummy.train
+  TRAIN.TEST <- train.dummy.test
+  TEST <- test.dummy
+} else if ( data_preProcess == "dummy.nzv.highlyCorDescr") {
+  TRAIN <- train.dummy.nzv.highlyCorDescr
+  TRAIN.TRAIN <- train.dummy.nzv.highlyCorDescr.train
+  TRAIN.TEST <- train.dummy.nzv.highlyCorDescr.test
+  TEST <- test.dummy.nzv.highlyCorDescr
+}
 
 #
 # xgbLinear
 #
 
 # 説明変数一覧の作成
-explanation_variable.xgbLinear <- names(subset(TRAIN, select = -c(response)))
+explanation_variable <- names(subset(TRAIN, select = -c(response)))
 
 # seeds の決定
 set.seed(123)
@@ -49,7 +69,7 @@ doParallel <- trainControl(
 
 # fit.xgbLinear <-
 #   train(
-#         x = TRAIN.TRAIN[,explanation_variable.xgbLinear]
+#         x = TRAIN.TRAIN[,explanation_variable]
 #         ,y = TRAIN.TRAIN$response
 #         ,trControl = doParallel
 #         ,method = "xgbLinear"
@@ -68,33 +88,33 @@ doParallel <- trainControl(
 cl <- makeCluster(detectCores(), type = 'PSOCK', outfile = " ")
 registerDoParallel(cl)
 
-model_list_xgbLinear <- caretList(
-  x = TRAIN.TRAIN[,explanation_variable.xgbLinear]
+model_list <- caretList(
+  x = TRAIN.TRAIN[,explanation_variable]
   ,y = TRAIN.TRAIN$response
   ,trControl = doParallel
-  #,preProcess = my_preProcess
+  ,preProcess = my_preProcess
   ,tuneList = list(
     xgboost = caretModelSpec(
-        method = "xgbLinear"
-        ,metric = "ROC" 
-        ,label = TRAIN.TRAIN$response
-        ,tuneGrid = expand.grid(
-                                nrounds = c(50)
-                                ,lambda = c(.3)
-                                ,alpha =  c(1)
-                                ,eta = c(.1)
-                    )
-        )
+      method = "xgbLinear"
+      ,metric = "ROC" 
+      ,label = TRAIN.TRAIN$response
+      ,tuneGrid = expand.grid(
+        nrounds = c(50:55)
+        ,lambda = c(.3)
+        ,alpha =  c(1)
+        ,eta = c(.1)
+      )
     )
+  )
 )
 
-# model_list_xgbLinear <- caretList(
+# model_list <- caretList(
 #   trControl = doParallel
 #   #,preProcess = my_preProcess
 #   ,tuneList = list(
 #     xgboost = caretModelSpec(
 #         method = "xgbLinear"
-#         ,x = train.dummy.train[,explanation_variable.xgbLinear]
+#         ,x = train.dummy.train[,explanation_variable]
 #         ,y = train.dummy.train$response
 #         ,metric = "ROC" 
 #         ,label = train.dummy.train$response
@@ -107,7 +127,7 @@ model_list_xgbLinear <- caretList(
 #     )
 #     ,xgboost2 = caretModelSpec(
 #         method = "xgbLinear"
-#         ,x = train.dummy.nzv.highlyCorDescr.train[,explanation_variable.xgbLinear]
+#         ,x = train.dummy.nzv.highlyCorDescr.train[,explanation_variable]
 #         ,y = train.dummy.nzv.highlyCorDescr.train$response
 #         ,metric = "ROC" 
 #         ,label = train.dummy.nzv.highlyCorDescr.train$response
@@ -124,8 +144,8 @@ model_list_xgbLinear <- caretList(
 stopCluster(cl)
 registerDoSEQ()
 
-fit.xgbLinear <- model_list_xgbLinear[[1]]
-# fit.xgbLinear <- model_list_xgbLinear[[2]]
+fit.xgbLinear <- model_list[[1]]
+# fit.xgbLinear <- model_list[[2]]
 
 # 2017/01/15
 # Fitting nrounds = 50, lambda = 0.1, alpha = 0.4, eta = 0.1 on full training set
@@ -167,18 +187,24 @@ fit.xgbLinear$preProcess
 #
 # テストデータにモデルを当てはめる ( Prob )
 #
-allProb.xgbLinear <- caret::extractProb(list(fit.xgbLinear),
-                                    testX = subset(TRAIN.TEST, select = -c(response)),
-                                    testY = unlist(subset(TRAIN.TEST, select = c(response))))
+allProb <- caret::extractProb(
+  list(fit.xgbLinear)
+  ,testX = subset(TRAIN.TEST, select = -c(response))
+  ,testY = unlist(subset(TRAIN.TEST, select = c(response)))
+)
 
 # dataType 列に Test と入っているもののみを抜き出す
-testProb.xgbLinear <- subset(allProb.xgbLinear, dataType == "Test")
+testProb <- subset(allProb, dataType == "Test")
 
-tp_xgbLinear <- subset(testProb.xgbLinear, object == "Object1")
-confusionMatrix(tp_xgbLinear$pred, tp_xgbLinear$obs)$overall[1]
+tp <- subset(testProb, object == "Object1")
+confusionMatrix(tp$pred, tp$obs)$overall[1]
 
 # ROC
-pROC::roc(tp_xgbLinear$obs, tp_xgbLinear$yes)
+pROC::roc(tp$obs, tp$yes)
+
+# 結果の保存
+result.xgbLinear.df <- rbind(result.xgbLinear.df, summaryResult(model_list[[1]]))
+saveRDS(result.xgbLinear.df, "result/result.xgbLinear.df.data")
 
 # predict() を利用した検算 
 if (is.null(fit.xgbLinear$preProcess)){
@@ -241,12 +267,13 @@ for(NUM in 1:10){
   SUBMIT_FILENAME <- paste("./submit/submit_", DATE, "_", NUM, "_", PREPROCESS, "_xgbLinear.csv", sep = "")
   
   if ( !file.exists(SUBMIT_FILENAME) ) {
-    write.table(out.xgbLinear, #出力データ
-                SUBMIT_FILENAME, #出力先
-                quote = FALSE, #文字列を「"」で囲む有無
-                col.names = FALSE, #変数名(列名)の有無
-                row.names = FALSE, #行番号の有無
-                sep = "," #区切り文字の指定
+    write.table(
+                out.xgbLinear #出力データ
+                ,SUBMIT_FILENAME #出力先
+                ,quote = FALSE #文字列を「"」で囲む有無
+                ,col.names = FALSE #変数名(列名)の有無
+                ,row.names = FALSE #行番号の有無
+                ,sep = "," #区切り文字の指定
     )
     break
   }

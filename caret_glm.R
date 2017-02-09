@@ -7,6 +7,9 @@ require(partykit)
 #require(rattle)
 require(mlbench)
 
+source("./summaryResult.R")
+result.glm.df <- readRDS("result/result.glm.df.data")
+
 #
 # 前処理
 #
@@ -14,15 +17,33 @@ source("./Data-pre-processing.R")
 
 my_preProcess <- c("center", "scale")
 
-TRAIN <- train.dummy.nzv.highlyCorDescr
-TRAIN.TRAIN <- train.dummy.nzv.highlyCorDescr.train
-TRAIN.TEST <- train.dummy.nzv.highlyCorDescr.test
-TEST <- test.dummy.nzv.highlyCorDescr
+data_preProcess <- "none"
+data_preProcess <- "nzv"
+data_preProcess <- "dummy"
+data_preProcess <- "dummy.nzv.highlyCorDescr"
 
-TRAIN <- train.dummy
-TRAIN.TRAIN <- train.dummy.train
-TRAIN.TEST <- train.dummy.test
-TEST <- test.dummy
+if ( data_preProcess == "none") {
+  TRAIN <- all.train
+  TRAIN.TRAIN <- train.train
+  TRAIN.TEST <- train.test
+  TEST <- test
+} else if ( data_preProcess == "nzv") {
+  TRAIN <- all.nzv.train
+  TRAIN.TRAIN <- train.nzv.train
+  TRAIN.TEST <- train.nzv.test
+  TEST <- test
+} else if ( data_preProcess == "dummy") {
+  TRAIN <- train.dummy
+  TRAIN.TRAIN <- train.dummy.train
+  TRAIN.TEST <- train.dummy.test
+  TEST <- test.dummy
+} else if ( data_preProcess == "dummy.nzv.highlyCorDescr") {
+  TRAIN <- train.dummy.nzv.highlyCorDescr
+  TRAIN.TRAIN <- train.dummy.nzv.highlyCorDescr.train
+  TRAIN.TEST <- train.dummy.nzv.highlyCorDescr.test
+  TEST <- test.dummy.nzv.highlyCorDescr
+}
+
 
 #
 # glm
@@ -58,26 +79,26 @@ doParallel <- trainControl(
 )
 
 # 説明変数一覧の作成
-explanation_variable.glm.dummy <- names(subset(TRAIN, select = -c(response)))
+explanation_variable <- names(subset(TRAIN, select = -c(response)))
 
-# fit.glm.dummy <-
+# fit.glm <-
 #   train(
-#         x = train.train[,explanation_variable.glm ]
+#         x = train.train[,explanation_variable]
 #         ,y = train.train$response
 #         ,trControl = my_control
 #         ,method = "glm"
 #         ,family = binomial(link="logit")
 #        )
 
-# cl <- makeCluster(detectCores(), type = 'PSOCK', outfile = " ")
-# registerDoParallel(cl)
+cl <- makeCluster(detectCores(), type = 'PSOCK', outfile = " ")
+registerDoParallel(cl)
 
-model_list_glm.dummy <- caretList(
-  x = TRAIN.TRAIN[,explanation_variable.glm.dummy]
+model_list <- caretList(
+  x = TRAIN.TRAIN[,explanation_variable]
   ,y = TRAIN.TRAIN$response
-  ,trControl = my_control
-  #,trControl = doParallel
-  #,preProcess = my_preProcess
+  #,trControl = my_control
+  ,trControl = doParallel
+  ,preProcess = my_preProcess
   ,tuneList = list(
     glm = caretModelSpec(
       method = "glm"
@@ -87,47 +108,51 @@ model_list_glm.dummy <- caretList(
     )
 )
 
-# stopCluster(cl)
-# registerDoSEQ()
+stopCluster(cl)
+registerDoSEQ()
 
-fit.glm.dummy <- model_list_glm.dummy[[1]]
+fit.glm <- model_list[[1]]
 
-fit.glm.dummy$times
+fit.glm$times
 # $everything
 # ユーザ   システム       経過  
 # 17.208      1.650     18.716 
 
-fit.glm.dummy
-fit.glm.dummy$finalModel
-summary(fit.glm.dummy$finalModel)
-fit.glm.dummy$preProcess
+fit.glm
+fit.glm$finalModel
+summary(fit.glm$finalModel)
+fit.glm$preProcess
 
-varImp(fit.glm.dummy, scale = FALSE)
+varImp(fit.glm, scale = FALSE)
 
 #
 # テストデータにモデルを当てはめる ( Prob )
 #
-allProb.glm.dummy <- caret::extractProb(
-                                        list(fit.glm.dummy)
-                                        ,testX = subset(TRAIN.TEST, select = -c(response))
-                                        ,testY = unlist(subset(TRAIN.TEST, select = c(response)))
-                                       )
+allProb <- caret::extractProb(
+                              list(fit.glm)
+                              ,testX = subset(TRAIN.TEST, select = -c(response))
+                              ,testY = unlist(subset(TRAIN.TEST, select = c(response)))
+                             )
 
 # dataType 列に Test と入っているもののみを抜き出す
-testProb.glm.dummy <- subset(allProb.glm.dummy, dataType == "Test")
-tp_glm.dummy <- subset(testProb.glm.dummy, object == "Object1")
+testProb <- subset(allProb, dataType == "Test")
+tp <- subset(testProb, object == "Object1")
 
 # confusionMatrix で比較
-confusionMatrix(tp_glm.dummy$pred, tp_glm.dummy$obs)$overall[1]
+confusionMatrix(tp$pred, tp$obs)$overall[1]
 
 # ROC
-pROC::roc(tp_glm.dummy$obs, tp_glm.dummy$yes)
+pROC::roc(tp$obs, tp$yes)
+
+# 結果の保存
+result.glm.df <- rbind(result.glm.df, summaryResult(model_list[[1]]))
+saveRDS(result.glm.df, "result/result.glm.df.data")
 
 # predict() を利用した検算 
-if (is.null(fit.glm.dummy$preProcess)){
+if (is.null(fit.glm$preProcess)){
   # preProcess を指定していない場合
   pred_test.verification <- predict(
-                                    fit.glm.dummy$finalModel
+                                    fit.glm$finalModel
                                     ,subset(TRAIN.TEST, select = -c(response))
                                     ,type = "response"
                                    )
@@ -138,7 +163,7 @@ if (is.null(fit.glm.dummy$preProcess)){
                                         ,method = my_preProcess
                                       ) %>%
     predict(., subset(TRAIN.TEST, select = -c(response))) %>%
-    predict(fit.glm.dummy$finalModel, ., type="response")
+    predict(fit.glm$finalModel, ., type="response")
 }
 
 # ROC
@@ -148,16 +173,16 @@ pROC::roc(TRAIN.TEST[,"response"], pred_test.verification)
 #
 # 予測データにモデルの当てはめ
 #
-if (is.null(fit.glm.dummy$preProcess)){
+if (is.null(fit.glm$preProcess)){
   # preProcess を指定していない場合
-  pred_test <- predict(fit.glm.dummy$finalModel, TEST, type="response")
+  pred_test <- predict(fit.glm$finalModel, TEST, type="response")
   
   PREPROCESS <- "no_preProcess"
 } else {
   # preProcess を指定している場合
   pred_test <- preProcess(TEST, method = my_preProcess) %>%
     predict(., TEST) %>%
-    predict(fit.glm.dummy$finalModel, ., type="response")
+    predict(fit.glm$finalModel, ., type="response")
   
   PREPROCESS <- paste(my_preProcess, collapse = "_")
 }
