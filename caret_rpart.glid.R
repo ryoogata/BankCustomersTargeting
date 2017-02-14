@@ -99,7 +99,7 @@ combi <- NA
 # 説明変数一覧の作成
 explanation_variable.orig <- names(subset(TRAIN, select = -c(response)))
 
-for(i in 20){
+for(i in 21:2){
   combi <- gtools::combinations(n = 21, r = i , v = explanation_variable.orig)
   
   for(j in 1:nrow(combi)){  
