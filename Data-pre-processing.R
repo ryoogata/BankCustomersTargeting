@@ -25,11 +25,12 @@ all[which(all$data == "test"),"y"] <- "none"
 # 目的変数名を response に変更
 names(all)[names(all) == "y"] <- "response"
 
-#
-# all$age2 <- cut(all$age, breaks=c(17,30,34,39,45,52,95))
-# all$duration2 <- cut(all$duration, breaks=c(-1,80,127,181,260,415,4918))
-# all$balance2 <- cut(all$balance,breaks=c(-6848,2,175,449,953,2281,102127))
-# all$pdays2 <- cut(all$pdays, breaks=c(-2,0,1,91,871))
+
+# Feature Engineering 
+all$cut.age <- cut(all$age, breaks=c(17,30,34,39,45,52,95))
+all$cut.duration <- cut(all$duration, breaks=c(-1,80,127,181,260,415,4918))
+all$cut.balance <- cut(all$balance,breaks=c(-8020,2,175,449,953,2281,102127))
+all$cut.pdays <- cut(all$pdays, breaks=c(-2,0,1,91,871))
 
 #
 # Dummy 変数なし
